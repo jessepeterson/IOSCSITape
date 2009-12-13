@@ -57,11 +57,13 @@ __RCSID("$NetBSD: mt.c,v 1.46 2008/07/20 00:52:40 lukem Exp $");
 #include <err.h>
 #include <fcntl.h>
 #include <paths.h>
-#include <rmt.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <inttypes.h>
+
+#include "custom_mtio.h"
 
 /* pseudo ioctl constants */
 #define MTASF	100

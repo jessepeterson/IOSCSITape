@@ -37,6 +37,8 @@ enum
 class IOSCSITape : public IOSCSIPrimaryCommandsDevice {
 	OSDeclareDefaultStructors(IOSCSITape)
 private:
+	int tapeNumber;
+	
 	/* pure function overrides from IOSCSIPrimaryCommandsDevice */
 	UInt32 GetInitialPowerState(void);
 	void HandlePowerChange(void);

@@ -7,6 +7,8 @@
 #define super IOSCSIPrimaryCommandsDevice
 OSDefineMetaClassAndStructors(IOSCSITape, IOSCSIPrimaryCommandsDevice)
 
+int gTapeCounter = -1;
+
 UInt32
 IOSCSITape::GetInitialPowerState(void)
 {
@@ -31,6 +33,11 @@ IOSCSITape::TicklePowerManager(void)
 bool
 IOSCSITape::InitializeDeviceSupport(void)
 {
+	/* For now, just increment the counter for each device. In the
+	 * future we may want to implement some sort of reclamation of
+	 * device types. */
+	tapeNumber = ++gTapeCounter;
+	
 	/* always initialize */
 	return true;
 }

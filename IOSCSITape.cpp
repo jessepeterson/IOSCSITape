@@ -2,6 +2,8 @@
 #include <sys/conf.h>
 #include <miscfs/devfs/devfs.h>
 #include <sys/errno.h>
+#include <sys/mtio.h>
+#include <sys/ioctl.h>
 
 #include <IOKit/scsi/SCSICommandOperationCodes.h>
 
@@ -242,7 +244,22 @@ int st_readwrite(dev_t dev, struct uio *uio, int ioflag)
 
 int st_ioctl(dev_t dev, u_long cmd, caddr_t data, int fflag, struct proc *p)
 {
-	return (ENOTTY);
+	// IOSCSITape *st = IOSCSITape::devices[minor(dev)];
+	struct mtop *mt = (struct mtop *) data;
+	
+	switch (cmd)
+	{
+		case MTIOCTOP:
+			// int number = mt->mt_count;
+			
+			switch (mt->mt_op)
+			{
+				default:
+					return ENOTTY;
+			}
+		default:
+			return ENOTTY;
+	}
 }
 
 #if 0

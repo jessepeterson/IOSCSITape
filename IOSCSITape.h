@@ -43,6 +43,7 @@ private:
 	int tapeNumber;
 	
 	/* utilities for major/minor to instance tracking */
+	void *cdev_node;
 	static IOSCSITape **devices;
 	static int deviceCount;
 

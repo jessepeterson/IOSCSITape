@@ -20,10 +20,9 @@ OSDefineMetaClassAndStructors(IOSCSITape, IOSCSIPrimaryCommandsDevice)
  * IOKit-instance-spaning devices. */
 class CdevMajorIniter
 {
-private:
+public:
 	static unsigned int major;
 	static struct cdevsw cdevsw;
-public:
 	CdevMajorIniter(void);
 	~CdevMajorIniter(void);
 };
@@ -140,7 +139,21 @@ IOSCSITape::TicklePowerManager(void)
 bool
 IOSCSITape::InitializeDeviceSupport(void)
 {
-	return FindDeviceMinorNumber();
+	if (FindDeviceMinorNumber())
+	{
+		cdev_node = devfs_make_node(
+			makedev(CdevMajorIniter.major, tapeNumber), 
+			DEVFS_CHAR,
+			UID_ROOT,
+			GID_OPERATOR,
+			0664,
+			TAPE_FORMAT, tapeNumber);
+		
+		if (cdev_node)
+			return true;
+	}
+
+	return false;
 }
 
 void
@@ -165,6 +178,7 @@ IOSCSITape::ResumeDeviceSupport(void)
 void
 IOSCSITape::StopDeviceSupport(void)
 {
+	devfs_remove(cdev_node);
 	ClearDeviceMinorNumber();
 }
 

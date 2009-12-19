@@ -5,6 +5,9 @@
 
 #include "IOSCSITape.h"
 
+#define SCSI_MOTION_TIMEOUT   (kThirtySecondTimeoutInMS * 2 * 5)
+#define SCSI_NOMOTION_TIMEOUT  kTenSecondTimeoutInMS
+
 #define super IOSCSIPrimaryCommandsDevice
 OSDefineMetaClassAndStructors(IOSCSITape, IOSCSIPrimaryCommandsDevice)
 
@@ -136,6 +139,8 @@ IOSCSITape::ERASE_6(
 	
 	SetDataTransferDirection(request, kSCSIDataTransfer_NoDataTransfer);
 	
+	SetTimeoutDuration(request, SCSI_MOTION_TIMEOUT);
+	
 ErrorExit:
 	
 	return result;
@@ -182,7 +187,7 @@ IOSCSITape::READ_6(
 	
 	SetDataTransferDirection(request, kSCSIDataTransfer_FromTargetToInitiator);
 	
-	SetTimeoutDuration(request, kThirtySecondTimeoutInMS);
+	SetTimeoutDuration(request, SCSI_MOTION_TIMEOUT);
 	
 	result = true;
 	
@@ -219,6 +224,8 @@ IOSCSITape::SPACE_6(
 							  CONTROL);
 	
 	SetDataTransferDirection(request, kSCSIDataTransfer_NoDataTransfer);
+	
+	SetTimeoutDuration(request, SCSI_MOTION_TIMEOUT);
 	
 	result = true;
 	
@@ -265,7 +272,7 @@ IOSCSITape::WRITE_6(
 	
 	SetDataTransferDirection(request, kSCSIDataTransfer_FromInitiatorToTarget);
 	
-	SetTimeoutDuration(request, kThirtySecondTimeoutInMS);
+	SetTimeoutDuration(request, SCSI_MOTION_TIMEOUT);
 	
 	result = true;
 	
@@ -299,6 +306,8 @@ IOSCSITape::WRITE_FILEMARKS_6(
 							  CONTROL);
 	
 	SetDataTransferDirection(request, kSCSIDataTransfer_NoDataTransfer);
+	
+	SetTimeoutDuration(request, SCSI_MOTION_TIMEOUT);
 	
 	result = true;
 	
@@ -345,6 +354,8 @@ IOSCSITape::LOAD_UNLOAD(
 	
 	SetDataTransferDirection(request, kSCSIDataTransfer_NoDataTransfer);
 	
+	SetTimeoutDuration(request, SCSI_MOTION_TIMEOUT);
+	
 	result = true;
 	
 ErrorExit:
@@ -379,7 +390,7 @@ IOSCSITape::READ_BLOCK_LIMITS(
 	
 	SetDataTransferDirection(request, kSCSIDataTransfer_FromTargetToInitiator);
 	
-	SetTimeoutDuration(request, kThirtySecondTimeoutInMS);
+	SetTimeoutDuration(request, SCSI_NOMOTION_TIMEOUT);
 	
 	result = true;
 	
@@ -443,7 +454,7 @@ IOSCSITape::READ_POSITION(
 	
 	SetDataTransferDirection(request, kSCSIDataTransfer_FromTargetToInitiator);
 	
-	SetTimeoutDuration(request, kThirtySecondTimeoutInMS);
+	SetTimeoutDuration(request, SCSI_NOMOTION_TIMEOUT);
 	
 	result = true;
 	
@@ -472,6 +483,8 @@ IOSCSITape::REWIND(
 							  CONTROL);
 	
 	SetDataTransferDirection(request, kSCSIDataTransfer_NoDataTransfer);
+	
+	SetTimeoutDuration(request, SCSI_MOTION_TIMEOUT);
 	
 	result = true;
 	

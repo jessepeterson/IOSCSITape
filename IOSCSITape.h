@@ -37,14 +37,18 @@ enum
 #define TAPE_FORMAT "rst%d"
 #define STATUS_LOG(s, ...) IOLog(TAPE_FORMAT ": " s "\n", tapeNumber, ## __VA_ARGS__)
 
+#define ST_DEVOPEN 0x01
+
 class IOSCSITape : public IOSCSIPrimaryCommandsDevice {
 	OSDeclareDefaultStructors(IOSCSITape)
+public:
+	unsigned int flags;
+	static IOSCSITape **devices;
 private:
 	int tapeNumber;
 	
 	/* utilities for major/minor to instance tracking */
 	void *cdev_node;
-	static IOSCSITape **devices;
 	static int deviceCount;
 
 	bool FindDeviceMinorNumber(void);

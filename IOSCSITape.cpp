@@ -150,7 +150,11 @@ IOSCSITape::InitializeDeviceSupport(void)
 			TAPE_FORMAT, tapeNumber);
 		
 		if (cdev_node)
+		{
+			flags = 0;
+			
 			return true;
+		}
 	}
 
 	return false;
@@ -207,12 +211,28 @@ IOSCSITape::ClearNotReadyStatus(void)
 
 int st_open(dev_t dev, int flags, int devtype, struct proc *p)
 {
-	return (ENODEV);
+	IOSCSITape *st = IOSCSITape::devices[minor(dev)];
+	int error = ENXIO;
+	
+	if (st->flags & ST_DEVOPEN)
+		error = EBUSY;
+	else
+	{
+		st->flags |= ST_DEVOPEN;
+		error = KERN_SUCCESS;
+	}
+	
+	return error;
 }
 
 int st_close(dev_t dev, int flags, int devtype, struct proc *p)
 {
-	return (ENODEV);
+	IOSCSITape *st = IOSCSITape::devices[minor(dev)];
+
+	/* TODO: Assure two filemarks after writes as a pseudo-EOD. */
+	st->flags &= ~ST_DEVOPEN;
+	
+	return KERN_SUCCESS;
 }
 
 int st_readwrite(dev_t dev, struct uio *uio, int ioflag)

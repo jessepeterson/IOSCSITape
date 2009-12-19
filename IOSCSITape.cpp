@@ -7,6 +7,7 @@
 
 #include "IOSCSITape.h"
 
+#define GROW_FACTOR 10
 #define SCSI_MOTION_TIMEOUT   (kThirtySecondTimeoutInMS * 2 * 5)
 #define SCSI_NOMOTION_TIMEOUT  kTenSecondTimeoutInMS
 
@@ -58,7 +59,62 @@ struct cdevsw CdevMajorIniter::cdevsw =
 
 static CdevMajorIniter CdevMajorIniter;
 
-int gTapeCounter = -1;
+IOSCSITape **IOSCSITape::devices = NULL;
+int IOSCSITape::deviceCount = 0; 
+
+bool
+IOSCSITape::FindDeviceMinorNumber(void)
+{
+	int i;
+	
+	if (deviceCount == 0)
+		if (!GrowDeviceMinorNumberMemory())
+			return false;
+	
+	for (i = 0; i < deviceCount && devices[i]; i++);
+	
+	if (i == deviceCount)
+		if (!GrowDeviceMinorNumberMemory())
+			return false;
+	
+	tapeNumber = i;
+	devices[tapeNumber] = this;
+	
+	return true;
+}
+
+bool
+IOSCSITape::GrowDeviceMinorNumberMemory(void)
+{
+	IOSCSITape **newDevices;
+	int cur_size = sizeof(IOSCSITape *) *  deviceCount;
+	int new_size = sizeof(IOSCSITape *) * (deviceCount + GROW_FACTOR);
+	
+	newDevices = (IOSCSITape **)IOMalloc(new_size);
+	
+	if (!newDevices)
+		return false;
+	
+	bzero(newDevices, new_size);
+	
+	if (deviceCount)
+	{
+		memcpy(newDevices, devices, cur_size);
+		IOFree(devices, cur_size);
+	}
+	
+	devices = newDevices;
+	deviceCount += GROW_FACTOR;
+	
+	return true;
+}
+
+void
+IOSCSITape::ClearDeviceMinorNumber(void)
+{
+	devices[tapeNumber] = NULL;
+	tapeNumber = 0;
+}
 
 UInt32
 IOSCSITape::GetInitialPowerState(void)
@@ -84,13 +140,7 @@ IOSCSITape::TicklePowerManager(void)
 bool
 IOSCSITape::InitializeDeviceSupport(void)
 {
-	/* For now, just increment the counter for each device. In the
-	 * future we may want to implement some sort of reclamation of
-	 * device types. */
-	tapeNumber = ++gTapeCounter;
-	
-	/* always initialize */
-	return true;
+	return FindDeviceMinorNumber();
 }
 
 void
@@ -115,6 +165,7 @@ IOSCSITape::ResumeDeviceSupport(void)
 void
 IOSCSITape::StopDeviceSupport(void)
 {
+	ClearDeviceMinorNumber();
 }
 
 void

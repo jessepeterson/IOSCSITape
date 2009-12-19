@@ -42,6 +42,14 @@ class IOSCSITape : public IOSCSIPrimaryCommandsDevice {
 private:
 	int tapeNumber;
 	
+	/* utilities for major/minor to instance tracking */
+	static IOSCSITape **devices;
+	static int deviceCount;
+
+	bool FindDeviceMinorNumber(void);
+	bool GrowDeviceMinorNumberMemory(void);
+	void ClearDeviceMinorNumber(void);
+	
 	/* pure function overrides from IOSCSIPrimaryCommandsDevice */
 	UInt32 GetInitialPowerState(void);
 	void HandlePowerChange(void);

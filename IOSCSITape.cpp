@@ -1,4 +1,5 @@
 #include <AssertMacros.h>
+#include <sys/conf.h>
 
 #include <IOKit/scsi/SCSICommandOperationCodes.h>
 
@@ -6,6 +7,32 @@
 
 #define super IOSCSIPrimaryCommandsDevice
 OSDefineMetaClassAndStructors(IOSCSITape, IOSCSIPrimaryCommandsDevice)
+
+/* The one really global operation of this kext is to register for a
+ * character device major number. The constructors and destructors
+ * get called on kext load/unload making it a great candidate for
+ * IOKit-instance-spaning devices. */
+class CdevMajorIniter
+{
+private:
+	static unsigned int major;
+	static struct cdevsw cdevsw;
+public:
+	CdevMajorIniter(void);
+	~CdevMajorIniter(void);
+};
+
+CdevMajorIniter::CdevMajorIniter(void)
+{
+	major = cdevsw_add(-1, &cdevsw);
+}
+
+CdevMajorIniter::~CdevMajorIniter(void)
+{
+	major = cdevsw_remove(major, &cdevsw);
+}
+
+static CdevMajorIniter CdevMajorIniter;
 
 int gTapeCounter = -1;
 

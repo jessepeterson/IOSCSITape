@@ -34,6 +34,9 @@ enum
 	kSCSIReadPositionServiceAction_ExtendedForm				= 0x08
 };
 
+#define TAPE_FORMAT "rst%d"
+#define STATUS_LOG(s, ...) IOLog(TAPE_FORMAT ": " s "\n", tapeNumber, ## __VA_ARGS__)
+
 class IOSCSITape : public IOSCSIPrimaryCommandsDevice {
 	OSDeclareDefaultStructors(IOSCSITape)
 private:
@@ -119,3 +122,8 @@ private:
 		SCSICmdField1Bit,
 		SCSICmdField1Byte);
 };
+
+int st_open(dev_t dev, int flags, int devtype, struct proc *p);
+int st_close(dev_t dev, int flags, int devtype, struct proc *p);
+int st_readwrite(dev_t dev, struct uio *uio, int ioflag);
+int st_ioctl(dev_t dev, u_long cmd, caddr_t data, int fflag, struct proc *p);

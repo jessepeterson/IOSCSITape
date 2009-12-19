@@ -1,5 +1,7 @@
 #include <AssertMacros.h>
 #include <sys/conf.h>
+#include <miscfs/devfs/devfs.h>
+#include <sys/errno.h>
 
 #include <IOKit/scsi/SCSICommandOperationCodes.h>
 
@@ -34,6 +36,25 @@ CdevMajorIniter::~CdevMajorIniter(void)
 {
 	major = cdevsw_remove(major, &cdevsw);
 }
+
+/* character device system call vectors */
+struct cdevsw CdevMajorIniter::cdevsw = 
+{
+	st_open,
+	st_close,
+	st_readwrite,
+	st_readwrite,
+	st_ioctl,
+	eno_stop,
+	eno_reset,
+	0,
+	(select_fcn_t *)enodev,
+	eno_mmap,
+	eno_strat,
+	eno_getc,
+	eno_putc,
+	0
+};
 
 static CdevMajorIniter CdevMajorIniter;
 
@@ -75,6 +96,10 @@ IOSCSITape::InitializeDeviceSupport(void)
 void
 IOSCSITape::StartDeviceSupport(void)
 {
+	STATUS_LOG("<%s, %s, %s> tape",
+			   GetVendorString(),
+			   GetProductString(),
+			   GetRevisionString());
 }
 
 void
@@ -107,6 +132,32 @@ bool
 IOSCSITape::ClearNotReadyStatus(void)
 {
 	return false;
+}
+
+#if 0
+#pragma mark -
+#pragma mark Character device system calls
+#pragma mark -
+#endif /* 0 */
+
+int st_open(dev_t dev, int flags, int devtype, struct proc *p)
+{
+	return (ENODEV);
+}
+
+int st_close(dev_t dev, int flags, int devtype, struct proc *p)
+{
+	return (ENODEV);
+}
+
+int st_readwrite(dev_t dev, struct uio *uio, int ioflag)
+{
+	return (ENODEV);
+}
+
+int st_ioctl(dev_t dev, u_long cmd, caddr_t data, int fflag, struct proc *p)
+{
+	return (ENOTTY);
 }
 
 #if 0

@@ -144,10 +144,10 @@ ErrorExit:
 bool
 IOSCSITape::READ_6(
 	SCSITaskIdentifier		request,
-	IOMemoryDescriptor *		readBuffer,
+	IOMemoryDescriptor *	readBuffer,
 	UInt32					blockSize,
-	SCSICmdField1Bit			SILI,
-	SCSICmdField1Bit			FIXED,
+	SCSICmdField1Bit		SILI,
+	SCSICmdField1Bit		FIXED,
 	SCSICmdField3Byte		TRANSFER_LENGTH,
 	SCSICmdField1Byte		CONTROL)
 {

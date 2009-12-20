@@ -44,6 +44,9 @@ class IOSCSITape : public IOSCSIPrimaryCommandsDevice {
 public:
 	unsigned int flags;
 	static IOSCSITape **devices;
+	
+	/* SCSI Operations */
+	IOReturn Rewind(void);
 private:
 	int tapeNumber;
 	

@@ -244,7 +244,7 @@ int st_readwrite(dev_t dev, struct uio *uio, int ioflag)
 
 int st_ioctl(dev_t dev, u_long cmd, caddr_t data, int fflag, struct proc *p)
 {
-	// IOSCSITape *st = IOSCSITape::devices[minor(dev)];
+	IOSCSITape *st = IOSCSITape::devices[minor(dev)];
 	struct mtop *mt = (struct mtop *) data;
 	
 	switch (cmd)
@@ -254,12 +254,55 @@ int st_ioctl(dev_t dev, u_long cmd, caddr_t data, int fflag, struct proc *p)
 			
 			switch (mt->mt_op)
 			{
+				case MTREW:
+					if (st->Rewind() == kIOReturnSuccess)
+						return KERN_SUCCESS;
+					else
+						return ENODEV;
 				default:
-					return ENOTTY;
+					return EINVAL;
 			}
 		default:
 			return ENOTTY;
 	}
+}
+
+#if 0
+#pragma mark -
+#pragma mark SCSI Operations
+#pragma mark -
+#endif /* 0 */
+
+IOReturn
+IOSCSITape::Rewind(void)
+{
+	IOReturn			status			= kIOReturnError;
+	SCSITaskIdentifier	task			= NULL;
+	SCSIServiceResponse	serviceResponse	= kSCSIServiceResponse_SERVICE_DELIVERY_OR_TARGET_FAILURE;
+	SCSITaskStatus		taskStatus		= kSCSITaskStatus_DeliveryFailure;
+	
+	task = GetSCSITask();
+	
+	require ((task != 0), ErrorExit);
+	
+	if (REWIND(task, 0, 0) == true)
+		serviceResponse = SendCommand(task, SCSI_MOTION_TIMEOUT);
+	
+	if (serviceResponse == kSCSIServiceResponse_TASK_COMPLETE)
+	{
+		taskStatus = GetTaskStatus(task);
+		
+		if (taskStatus == kSCSITaskStatus_GOOD)
+			status = kIOReturnSuccess;
+		else if (taskStatus == kSCSITaskStatus_CHECK_CONDITION)
+			STATUS_LOG("unhandled CHECK CONDITION");
+	}
+	
+	ReleaseSCSITask(task);
+	
+ErrorExit:
+	
+	return status;
 }
 
 #if 0

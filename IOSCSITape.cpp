@@ -23,7 +23,7 @@ OSDefineMetaClassAndStructors(IOSCSITape, IOSCSIPrimaryCommandsDevice)
 class CdevMajorIniter
 {
 public:
-	static unsigned int major;
+	int majorNumber;
 	static struct cdevsw cdevsw;
 	CdevMajorIniter(void);
 	~CdevMajorIniter(void);
@@ -31,12 +31,12 @@ public:
 
 CdevMajorIniter::CdevMajorIniter(void)
 {
-	major = cdevsw_add(-1, &cdevsw);
+	majorNumber = cdevsw_add(-1, &cdevsw);
 }
 
 CdevMajorIniter::~CdevMajorIniter(void)
 {
-	major = cdevsw_remove(major, &cdevsw);
+	cdevsw_remove(majorNumber, &cdevsw);
 }
 
 /* character device system call vectors */
@@ -144,7 +144,7 @@ IOSCSITape::InitializeDeviceSupport(void)
 	if (FindDeviceMinorNumber())
 	{
 		cdev_node = devfs_make_node(
-			makedev(CdevMajorIniter.major, tapeNumber), 
+			makedev(CdevMajorIniter.majorNumber, tapeNumber), 
 			DEVFS_CHAR,
 			UID_ROOT,
 			GID_OPERATOR,

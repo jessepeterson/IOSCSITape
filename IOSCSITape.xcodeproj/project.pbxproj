@@ -19,7 +19,7 @@
 		1A224C3FFF42367911CA2CB7 /* IOSCSITape.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = IOSCSITape.cpp; sourceTree = "<group>"; };
 		32D94FCF0562CBF700B6AF17 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		32D94FD00562CBF700B6AF17 /* IOSCSITape.kext */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = IOSCSITape.kext; sourceTree = BUILT_PRODUCTS_DIR; };
-		888FC69510D4DDF9004FB2FE /* mt */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; name = mt; path = build/Debug/mt; sourceTree = "<group>"; };
+		888FC69510D4DDF9004FB2FE /* mt */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = mt; sourceTree = BUILT_PRODUCTS_DIR; };
 		888FC69910D4DE14004FB2FE /* mt.1 */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.man; path = mt.1; sourceTree = "<group>"; };
 		888FC69A10D4DE14004FB2FE /* mt.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = mt.c; sourceTree = "<group>"; };
 		888FC6A010D4DE7C004FB2FE /* custom_mtio.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = custom_mtio.h; sourceTree = "<group>"; };

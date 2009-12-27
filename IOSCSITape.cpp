@@ -390,7 +390,7 @@ IOSCSITape::GetDeviceDetails(void)
 		if (modeData.header.DEVICE_SPECIFIC_PARAMETER & SMH_DSP_BUFF_MODE)
 			flags |= ST_BUFF_MODE;
 
-		STATUS_LOG("density code: %d, %d-byte blocks, write-%s, %buffered",
+		STATUS_LOG("density code: %d, %d-byte blocks, write-%s, %sbuffered",
 				   density, blksize,
 				   flags & ST_READONLY ? "protected" : "enabled",
 				   flags & ST_BUFF_MODE ? "" : "un");

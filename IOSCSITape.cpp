@@ -276,30 +276,58 @@ int st_ioctl(dev_t dev, u_long cmd, caddr_t data, int fflag, struct proc *p)
 #pragma mark -
 #endif /* 0 */
 
+SCSITaskStatus
+IOSCSITape::DoSCSICommand(
+	SCSITaskIdentifier	request,
+	UInt32				timeoutDuration)
+{
+	SCSITaskStatus		taskStatus		= kSCSITaskStatus_DeliveryFailure;
+	SCSIServiceResponse	serviceResponse	= kSCSIServiceResponse_SERVICE_DELIVERY_OR_TARGET_FAILURE;
+	
+	require((request != 0), ErrorExit);
+	
+	serviceResponse = SendCommand(request, timeoutDuration);
+	
+	if (serviceResponse != kSCSIServiceResponse_TASK_COMPLETE)
+	{
+		STATUS_LOG("unknown service response: 0x%x", serviceResponse);
+		goto ErrorExit;
+	}
+	else
+	{
+		taskStatus = GetTaskStatus(request);
+		
+		if (taskStatus == kSCSITaskStatus_CHECK_CONDITION)
+		{
+			STATUS_LOG("unhandled CHECK CONDITION");
+		}
+		else if (taskStatus != kSCSITaskStatus_GOOD)
+		{
+			STATUS_LOG("unknown task status: 0x%x", taskStatus);
+		}
+	}
+	
+ErrorExit:
+	
+	return taskStatus;
+}
+
 IOReturn
 IOSCSITape::Rewind(void)
 {
-	IOReturn			status			= kIOReturnError;
-	SCSITaskIdentifier	task			= NULL;
-	SCSIServiceResponse	serviceResponse	= kSCSIServiceResponse_SERVICE_DELIVERY_OR_TARGET_FAILURE;
-	SCSITaskStatus		taskStatus		= kSCSITaskStatus_DeliveryFailure;
+	IOReturn			status		= kIOReturnError;
+	SCSITaskIdentifier	task		= NULL;
+	SCSITaskStatus		taskStatus	= kSCSITaskStatus_DeliveryFailure;
 	
 	task = GetSCSITask();
 	
 	require ((task != 0), ErrorExit);
 	
 	if (REWIND(task, 0, 0) == true)
-		serviceResponse = SendCommand(task, SCSI_MOTION_TIMEOUT);
+		taskStatus = DoSCSICommand(task, SCSI_MOTION_TIMEOUT);
 	
-	if (serviceResponse == kSCSIServiceResponse_TASK_COMPLETE)
-	{
-		taskStatus = GetTaskStatus(task);
-		
-		if (taskStatus == kSCSITaskStatus_GOOD)
-			status = kIOReturnSuccess;
-		else if (taskStatus == kSCSITaskStatus_CHECK_CONDITION)
-			STATUS_LOG("unhandled CHECK CONDITION");
-	}
+	if (taskStatus == kSCSITaskStatus_GOOD)
+		status = kIOReturnSuccess;
 	
 	ReleaseSCSITask(task);
 	
@@ -319,12 +347,12 @@ ErrorExit:
 IOReturn
 IOSCSITape::GetDeviceDetails(void)
 {
-	IOReturn				status			= kIOReturnError;
-	SCSITaskIdentifier		task			= NULL;
-	SCSITaskStatus			taskStatus		= kSCSITaskStatus_DeviceNotResponding;
-	SCSIServiceResponse		serviceResponse	= kSCSIServiceResponse_SERVICE_DELIVERY_OR_TARGET_FAILURE;
-	IOMemoryDescriptor *	dataBuffer		= NULL;
-	SCSI_ModeSense_Default	modeData		= { 0 };
+	IOReturn				status		= kIOReturnError;
+	SCSITaskIdentifier		task		= NULL;
+	SCSITaskStatus			taskStatus	= kSCSITaskStatus_DeviceNotResponding;
+	IOMemoryDescriptor *	dataBuffer	= NULL;
+	SCSI_ModeSense_Default	modeData	= { 0 };
+
 	dataBuffer = IOMemoryDescriptor::withAddress(&modeData,
 												 sizeof(modeData),
 												 kIODirectionIn);
@@ -343,38 +371,31 @@ IOSCSITape::GetDeviceDetails(void)
 					 sizeof(SCSI_ModeSense_Default), 
 					 0x00) == true)
 	{
-		serviceResponse = SendCommand(task, SCSI_NOMOTION_TIMEOUT);
+		taskStatus = DoSCSICommand(task, SCSI_NOMOTION_TIMEOUT);
 	}
 	
-	if (serviceResponse == kSCSIServiceResponse_TASK_COMPLETE)
+	if (taskStatus == kSCSITaskStatus_GOOD)
 	{
-		taskStatus = GetTaskStatus(task);
+		blksize = 
+			(modeData.descriptor.BLOCK_LENGTH[0] << 16) |
+			(modeData.descriptor.BLOCK_LENGTH[1] <<  8) |
+			 modeData.descriptor.BLOCK_LENGTH[2];
 		
-		if (taskStatus == kSCSITaskStatus_GOOD)
-		{
-			blksize = 
-				(modeData.descriptor.BLOCK_LENGTH[0] << 16) |
-				(modeData.descriptor.BLOCK_LENGTH[1] <<  8) |
-				 modeData.descriptor.BLOCK_LENGTH[2];
-			
-			density = modeData.descriptor.DENSITY_CODE;
-			flags &= ~(ST_READONLY | ST_BUFF_MODE);
-			
-			if (modeData.header.DEVICE_SPECIFIC_PARAMETER & SMH_DSP_WRITE_PROT)
-				flags |= ST_READONLY;
-			
-			if (modeData.header.DEVICE_SPECIFIC_PARAMETER & SMH_DSP_BUFF_MODE)
-				flags |= ST_BUFF_MODE;
+		density = modeData.descriptor.DENSITY_CODE;
+		flags &= ~(ST_READONLY | ST_BUFF_MODE);
+		
+		if (modeData.header.DEVICE_SPECIFIC_PARAMETER & SMH_DSP_WRITE_PROT)
+			flags |= ST_READONLY;
+		
+		if (modeData.header.DEVICE_SPECIFIC_PARAMETER & SMH_DSP_BUFF_MODE)
+			flags |= ST_BUFF_MODE;
 
-			STATUS_LOG("density code: %d, %d-byte blocks, write-%s, %buffered",
-					   density, blksize,
-					   flags & ST_READONLY ? "protected" : "enabled",
-					   flags & ST_BUFF_MODE ? "" : "un");
-			
-			status = kIOReturnSuccess;
-		}
-		else if (taskStatus == kSCSITaskStatus_CHECK_CONDITION)
-			STATUS_LOG("unhandled CHECK CONDITION");
+		STATUS_LOG("density code: %d, %d-byte blocks, write-%s, %buffered",
+				   density, blksize,
+				   flags & ST_READONLY ? "protected" : "enabled",
+				   flags & ST_BUFF_MODE ? "" : "un");
+		
+		status = kIOReturnSuccess;
 	}
 	
 	ReleaseSCSITask(task);
@@ -392,7 +413,6 @@ IOSCSITape::GetDeviceBlockLimits(void)
 	IOReturn				status			= kIOReturnError;
 	UInt8					blockLimitsData[6]	= { 0 };
 	SCSITaskStatus			taskStatus		= kSCSITaskStatus_DeliveryFailure;
-	SCSIServiceResponse		serviceResponse	= kSCSIServiceResponse_SERVICE_DELIVERY_OR_TARGET_FAILURE;
 	IOMemoryDescriptor *	dataBuffer		= NULL;
 	
 	dataBuffer = IOMemoryDescriptor::withAddress(&blockLimitsData, 
@@ -405,33 +425,25 @@ IOSCSITape::GetDeviceBlockLimits(void)
 	
 	require ((task != 0), ErrorExit);
 	
-	
 	if (READ_BLOCK_LIMITS(task, dataBuffer, 0x00) == true)
-		serviceResponse = SendCommand(task, SCSI_NOMOTION_TIMEOUT);
+		taskStatus = DoSCSICommand(task, SCSI_NOMOTION_TIMEOUT);
 	
-	if (serviceResponse == kSCSIServiceResponse_TASK_COMPLETE)
+	if (taskStatus == kSCSITaskStatus_GOOD)
 	{
-		taskStatus = GetTaskStatus(task);
+		// blkgran = blockLimitsData[0] & 0x1F;
 		
-		if (taskStatus == kSCSITaskStatus_GOOD)
-		{
-			// blkgran = blockLimitsData[0] & 0x1F;
-			
-			blkmin =
-				(blockLimitsData[4] <<  8) |
-				 blockLimitsData[5];
-			
-			blkmax =
-				(blockLimitsData[1] << 16) |
-				(blockLimitsData[2] <<  8) |
-				 blockLimitsData[3];
-			
-			STATUS_LOG("min/max block size: %d/%d", blkmin, blkmax);
-			
-			status = kIOReturnSuccess;
-		}
-		else if (taskStatus == kSCSITaskStatus_CHECK_CONDITION)
-			STATUS_LOG("unhandled CHECK CONDITION");
+		blkmin =
+			(blockLimitsData[4] <<  8) |
+			 blockLimitsData[5];
+		
+		blkmax =
+			(blockLimitsData[1] << 16) |
+			(blockLimitsData[2] <<  8) |
+			 blockLimitsData[3];
+		
+		STATUS_LOG("min/max block size: %d/%d", blkmin, blkmax);
+		
+		status = kIOReturnSuccess;
 	}
 
 	ReleaseSCSITask(task);

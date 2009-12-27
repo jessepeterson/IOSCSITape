@@ -75,6 +75,9 @@ public:
 private:
 	int tapeNumber;
 	
+	/* SCSI Operations */
+	SCSITaskStatus DoSCSICommand(SCSITaskIdentifier request, UInt32 timeoutDuration);
+
 	/* utilities for major/minor to instance tracking */
 	void *cdev_node;
 	static int deviceCount;

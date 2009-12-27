@@ -169,6 +169,8 @@ IOSCSITape::StartDeviceSupport(void)
 			   GetVendorString(),
 			   GetProductString(),
 			   GetRevisionString());
+	
+	GetDeviceDetails();
 }
 
 void
@@ -299,6 +301,83 @@ IOSCSITape::Rewind(void)
 	}
 	
 	ReleaseSCSITask(task);
+	
+ErrorExit:
+	
+	return status;
+}
+
+/*
+ *  GetDeviceDetails()
+ *  Get mode sense details and set device parameters.
+ *
+ *  Would have ideally liked to use super::GetModeSense() but it appears
+ *  to set the DBD bit and we need the descriptor values for density,
+ *  etc.
+ */
+IOReturn
+IOSCSITape::GetDeviceDetails(void)
+{
+	IOReturn				status			= kIOReturnError;
+	SCSITaskIdentifier		task			= NULL;
+	SCSITaskStatus			taskStatus		= kSCSITaskStatus_DeviceNotResponding;
+	SCSIServiceResponse		serviceResponse	= kSCSIServiceResponse_SERVICE_DELIVERY_OR_TARGET_FAILURE;
+	IOMemoryDescriptor *	dataBuffer		= NULL;
+	SCSI_ModeSense_Default	modeData		= { 0 };
+	dataBuffer = IOMemoryDescriptor::withAddress(&modeData,
+												 sizeof(modeData),
+												 kIODirectionIn);
+	
+	require((dataBuffer != 0), ErrorExit);
+	
+	task = GetSCSITask();
+	
+	require((task != 0), ErrorExit);
+
+	if (MODE_SENSE_6(task, 
+					 dataBuffer, 
+					 0x0,
+					 0x0,
+					 0x00,
+					 sizeof(SCSI_ModeSense_Default), 
+					 0x00) == true)
+	{
+		serviceResponse = SendCommand(task, SCSI_NOMOTION_TIMEOUT);
+	}
+	
+	if (serviceResponse == kSCSIServiceResponse_TASK_COMPLETE)
+	{
+		taskStatus = GetTaskStatus(task);
+		
+		if (taskStatus == kSCSITaskStatus_GOOD)
+		{
+			blksize = 
+				(modeData.descriptor.BLOCK_LENGTH[0] << 16) |
+				(modeData.descriptor.BLOCK_LENGTH[1] <<  8) |
+				 modeData.descriptor.BLOCK_LENGTH[2];
+			
+			density = modeData.descriptor.DENSITY_CODE;
+			flags &= ~(ST_READONLY | ST_BUFF_MODE);
+			
+			if (modeData.header.DEVICE_SPECIFIC_PARAMETER & SMH_DSP_WRITE_PROT)
+				flags |= ST_READONLY;
+			
+			if (modeData.header.DEVICE_SPECIFIC_PARAMETER & SMH_DSP_BUFF_MODE)
+				flags |= ST_BUFF_MODE;
+
+			STATUS_LOG("density code: %d, %d-byte blocks, write-%s, %buffered",
+					   density, blksize,
+					   flags & ST_READONLY ? "protected" : "enabled",
+					   flags & ST_BUFF_MODE ? "" : "un");
+			
+			status = kIOReturnSuccess;
+		}
+		else if (taskStatus == kSCSITaskStatus_CHECK_CONDITION)
+			STATUS_LOG("unhandled CHECK CONDITION");
+	}
+	
+	ReleaseSCSITask(task);
+	dataBuffer->release();
 	
 ErrorExit:
 	

@@ -1,4 +1,5 @@
 #include <IOKit/scsi/IOSCSIMultimediaCommandsDevice.h>
+#include <IOKit/scsi/SCSICmds_MODE_Definitions.h>
 
 /* These were defined in the OS-supplied SCSICommandOperationCodes.h but
  * "#if 0"-ed out. May need to back these out if the official ones ever
@@ -34,10 +35,26 @@ enum
 	kSCSIReadPositionServiceAction_ExtendedForm				= 0x08
 };
 
+struct SCSI_ModeSense_Default
+{
+	SPCModeParameterHeader6			header;
+	ModeParameterBlockDescriptor	descriptor;
+};
+
+typedef struct SCSI_ModeSense_Default SCSI_ModeSense_Default;
+
+#define SMH_DSP_BUFF_MODE       0x70
+#define SMH_DSP_BUFF_MODE_OFF   0x00
+#define SMH_DSP_BUFF_MODE_ON    0x10
+#define SMH_DSP_BUFF_MODE_MLTI  0x20
+#define SMH_DSP_WRITE_PROT      0x80
+
 #define TAPE_FORMAT "rst%d"
 #define STATUS_LOG(s, ...) IOLog(TAPE_FORMAT ": " s "\n", tapeNumber, ## __VA_ARGS__)
 
-#define ST_DEVOPEN 0x01
+#define ST_DEVOPEN			0x01
+#define ST_READONLY			0x02
+#define ST_BUFF_MODE		0x04
 
 class IOSCSITape : public IOSCSIPrimaryCommandsDevice {
 	OSDeclareDefaultStructors(IOSCSITape)
@@ -45,8 +62,12 @@ public:
 	unsigned int flags;
 	static IOSCSITape **devices;
 	
+	int blksize;
+	int density;
+	
 	/* SCSI Operations */
 	IOReturn Rewind(void);
+	IOReturn GetDeviceDetails(void);
 private:
 	int tapeNumber;
 	

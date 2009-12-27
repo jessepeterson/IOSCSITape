@@ -313,6 +313,30 @@ ErrorExit:
 }
 
 IOReturn
+IOSCSITape::TestUnitReady(void)
+{
+	SCSITaskIdentifier	task			= NULL;
+	IOReturn			result			= kIOReturnError;
+	SCSITaskStatus		taskStatus		= kSCSITaskStatus_DeviceNotResponding;
+	
+	task = GetSCSITask();
+	
+	require((task != 0), ErrorExit);
+	
+	if (TEST_UNIT_READY(task, 0x00) == true)
+		taskStatus = DoSCSICommand(task, SCSI_NOMOTION_TIMEOUT);
+	
+	if (taskStatus == kSCSITaskStatus_GOOD)
+		result = kIOReturnSuccess;
+	
+	ReleaseSCSITask(task);
+	
+ErrorExit:
+	
+	return result;
+}
+
+IOReturn
 IOSCSITape::Rewind(void)
 {
 	IOReturn			status		= kIOReturnError;

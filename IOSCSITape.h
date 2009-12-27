@@ -72,6 +72,7 @@ public:
 	IOReturn Rewind(void);
 	IOReturn GetDeviceDetails(void);
 	IOReturn GetDeviceBlockLimits(void);
+	IOReturn TestUnitReady(void);
 private:
 	int tapeNumber;
 	

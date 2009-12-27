@@ -171,6 +171,7 @@ IOSCSITape::StartDeviceSupport(void)
 			   GetRevisionString());
 	
 	GetDeviceDetails();
+	GetDeviceBlockLimits();
 }
 
 void
@@ -376,6 +377,63 @@ IOSCSITape::GetDeviceDetails(void)
 			STATUS_LOG("unhandled CHECK CONDITION");
 	}
 	
+	ReleaseSCSITask(task);
+	dataBuffer->release();
+	
+ErrorExit:
+	
+	return status;
+}
+
+IOReturn
+IOSCSITape::GetDeviceBlockLimits(void)
+{
+	SCSITaskIdentifier		task			= NULL;
+	IOReturn				status			= kIOReturnError;
+	UInt8					blockLimitsData[6]	= { 0 };
+	SCSITaskStatus			taskStatus		= kSCSITaskStatus_DeliveryFailure;
+	SCSIServiceResponse		serviceResponse	= kSCSIServiceResponse_SERVICE_DELIVERY_OR_TARGET_FAILURE;
+	IOMemoryDescriptor *	dataBuffer		= NULL;
+	
+	dataBuffer = IOMemoryDescriptor::withAddress(&blockLimitsData, 
+												 sizeof(blockLimitsData), 
+												 kIODirectionIn);
+
+	require ((dataBuffer != 0), ErrorExit);
+	
+	task = GetSCSITask();
+	
+	require ((task != 0), ErrorExit);
+	
+	
+	if (READ_BLOCK_LIMITS(task, dataBuffer, 0x00) == true)
+		serviceResponse = SendCommand(task, SCSI_NOMOTION_TIMEOUT);
+	
+	if (serviceResponse == kSCSIServiceResponse_TASK_COMPLETE)
+	{
+		taskStatus = GetTaskStatus(task);
+		
+		if (taskStatus == kSCSITaskStatus_GOOD)
+		{
+			// blkgran = blockLimitsData[0] & 0x1F;
+			
+			blkmin =
+				(blockLimitsData[4] <<  8) |
+				 blockLimitsData[5];
+			
+			blkmax =
+				(blockLimitsData[1] << 16) |
+				(blockLimitsData[2] <<  8) |
+				 blockLimitsData[3];
+			
+			STATUS_LOG("min/max block size: %d/%d", blkmin, blkmax);
+			
+			status = kIOReturnSuccess;
+		}
+		else if (taskStatus == kSCSITaskStatus_CHECK_CONDITION)
+			STATUS_LOG("unhandled CHECK CONDITION");
+	}
+
 	ReleaseSCSITask(task);
 	dataBuffer->release();
 	

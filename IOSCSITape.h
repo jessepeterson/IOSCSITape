@@ -65,9 +65,13 @@ public:
 	int blksize;
 	int density;
 	
+	int blkmin;
+	int blkmax;
+	
 	/* SCSI Operations */
 	IOReturn Rewind(void);
 	IOReturn GetDeviceDetails(void);
+	IOReturn GetDeviceBlockLimits(void);
 private:
 	int tapeNumber;
 	

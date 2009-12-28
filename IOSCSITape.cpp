@@ -249,9 +249,21 @@ int st_ioctl(dev_t dev, u_long cmd, caddr_t data, int fflag, struct proc *p)
 {
 	IOSCSITape *st = IOSCSITape::devices[minor(dev)];
 	struct mtop *mt = (struct mtop *) data;
+	struct mtget *g = (struct mtget *) data;
 	
 	switch (cmd)
 	{
+		case MTIOCGET:
+			memset(g, 0, sizeof(struct mtget));
+			g->mt_type = 0x7;	/* Ultrix compat *//*? */
+			g->mt_blksiz = st->blksize;
+			g->mt_density = st->density;
+			// g->mt_fileno = st->fileno;
+			// g->mt_blkno = st->blkno;
+			g->mt_dsreg = st->flags;	/* report raw driver flags */
+			/* TODO: Implement the full mtget struct */
+			
+			return KERN_SUCCESS;
 		case MTIOCTOP:
 			// int number = mt->mt_count;
 			

@@ -85,11 +85,14 @@ public:
 	IOReturn TestUnitReady(void);
 	IOReturn WriteFilemarks(int);
 	IOReturn Space(SCSISpaceCode, int);
+	IOReturn Load(void);
+	IOReturn Unload(void);
 private:
 	int tapeNumber;
 	
 	/* SCSI Operations */
 	SCSITaskStatus DoSCSICommand(SCSITaskIdentifier, UInt32);
+	IOReturn LoadUnload(int);
 
 	/* utilities for major/minor to instance tracking */
 	void *cdev_node;

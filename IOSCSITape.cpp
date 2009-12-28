@@ -543,6 +543,42 @@ ErrorExit:
 	return status;	
 }
 
+IOReturn
+IOSCSITape::LoadUnload(int loadUnload)
+{
+	SCSITaskIdentifier	task			= NULL;
+	IOReturn			status			= kIOReturnError;
+	SCSITaskStatus		taskStatus		= kSCSITaskStatus_DeviceNotResponding;
+	
+	task = GetSCSITask();
+	
+	require((task != 0), ErrorExit);
+	
+	if (LOAD_UNLOAD(task, 0, 0, 0, 0, loadUnload, 0) == true)
+		taskStatus = DoSCSICommand(task, SCSI_MOTION_TIMEOUT);
+	
+	if (taskStatus == kSCSITaskStatus_GOOD)
+		status = kIOReturnSuccess;
+	
+	ReleaseSCSITask(task);
+	
+ErrorExit:
+	
+	return status;
+}
+
+IOReturn
+IOSCSITape::Load(void)
+{
+	return LoadUnload(1);
+}
+
+IOReturn
+IOSCSITape::Unload(void)
+{
+	return LoadUnload(0);
+}
+
 #if 0
 #pragma mark -
 #pragma mark 0x01 SSC Implicit Address Commands

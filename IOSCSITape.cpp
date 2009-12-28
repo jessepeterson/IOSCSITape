@@ -288,6 +288,11 @@ int st_ioctl(dev_t dev, u_long cmd, caddr_t data, int fflag, struct proc *p)
 #pragma mark -
 #endif /* 0 */
 
+/*
+ *  DoSCSICommand()
+ *  Encapsulate super::SendCommand() to handle unexpected service and
+ *  task errors as well as hand off to SCSI SENSE interpreter.
+ */
 SCSITaskStatus
 IOSCSITape::DoSCSICommand(
 	SCSITaskIdentifier	request,

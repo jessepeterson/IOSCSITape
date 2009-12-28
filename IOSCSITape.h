@@ -43,6 +43,16 @@ struct SCSI_ModeSense_Default
 
 typedef struct SCSI_ModeSense_Default SCSI_ModeSense_Default;
 
+enum SCSISpaceCode
+{
+	kSCSISpaceCode_LogicalBlocks		= 0x0,
+	kSCSISpaceCode_Filemarks			= 0x1,
+	kSCSISpaceCode_SequentialFilemarks	= 0x2,
+	kSCSISpaceCode_EndOfData			= 0x3,
+	kSCSISpaceCode_Setmarks				= 0x4,
+	kSCSISpaceCode_SequentialSetmarks	= 0x5
+};
+
 #define SMH_DSP_BUFF_MODE       0x70
 #define SMH_DSP_BUFF_MODE_OFF   0x00
 #define SMH_DSP_BUFF_MODE_ON    0x10
@@ -74,6 +84,7 @@ public:
 	IOReturn GetDeviceBlockLimits(void);
 	IOReturn TestUnitReady(void);
 	IOReturn WriteFilemarks(int);
+	IOReturn Space(SCSISpaceCode, int);
 private:
 	int tapeNumber;
 	

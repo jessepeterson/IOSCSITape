@@ -507,8 +507,32 @@ IOSCSITape::WriteFilemarks(int count)
 	require((task != 0), ErrorExit);
 	
 	if (WRITE_FILEMARKS_6(task, 0x0, 0x0, count, 0) == true)
-		taskStatus = DoSCSICommand(task, kThirtySecondTimeoutInMS);
-		
+		taskStatus = DoSCSICommand(task, SCSI_MOTION_TIMEOUT);
+	
+	if (taskStatus == kSCSITaskStatus_GOOD)
+		status = kIOReturnSuccess;
+	
+	ReleaseSCSITask(task);
+	
+ErrorExit:
+	
+	return status;	
+}
+
+IOReturn
+IOSCSITape::Space(SCSISpaceCode type, int count)
+{
+	SCSITaskIdentifier	task			= NULL;
+	IOReturn			status			= kIOReturnError;
+	SCSITaskStatus		taskStatus		= kSCSITaskStatus_No_Status;
+	
+	task = GetSCSITask();
+	
+	require((task != 0), ErrorExit);
+	
+	if (SPACE_6(task, type, count, 0) == true)
+		taskStatus = DoSCSICommand(task, SCSI_MOTION_TIMEOUT);
+	
 	if (taskStatus == kSCSITaskStatus_GOOD)
 		status = kIOReturnSuccess;
 	

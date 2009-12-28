@@ -495,6 +495,30 @@ ErrorExit:
 	return status;
 }
 
+IOReturn
+IOSCSITape::WriteFilemarks(int count)
+{
+	SCSITaskIdentifier	task		= NULL;
+	IOReturn			status		= kIOReturnError;
+	SCSITaskStatus		taskStatus	= kSCSITaskStatus_No_Status;
+	
+	task = GetSCSITask();
+	
+	require((task != 0), ErrorExit);
+	
+	if (WRITE_FILEMARKS_6(task, 0x0, 0x0, count, 0) == true)
+		taskStatus = DoSCSICommand(task, kThirtySecondTimeoutInMS);
+		
+	if (taskStatus == kSCSITaskStatus_GOOD)
+		status = kIOReturnSuccess;
+	
+	ReleaseSCSITask(task);
+	
+ErrorExit:
+	
+	return status;	
+}
+
 #if 0
 #pragma mark -
 #pragma mark 0x01 SSC Implicit Address Commands

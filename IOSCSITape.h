@@ -73,11 +73,12 @@ public:
 	IOReturn GetDeviceDetails(void);
 	IOReturn GetDeviceBlockLimits(void);
 	IOReturn TestUnitReady(void);
+	IOReturn WriteFilemarks(int);
 private:
 	int tapeNumber;
 	
 	/* SCSI Operations */
-	SCSITaskStatus DoSCSICommand(SCSITaskIdentifier request, UInt32 timeoutDuration);
+	SCSITaskStatus DoSCSICommand(SCSITaskIdentifier, UInt32);
 
 	/* utilities for major/minor to instance tracking */
 	void *cdev_node;

@@ -53,6 +53,26 @@ enum SCSISpaceCode
 	kSCSISpaceCode_SequentialSetmarks	= 0x5
 };
 
+struct SCSI_ReadPositionShortForm
+{
+	UInt8	flags;
+	UInt8	partitionNumber;
+	UInt32	firstLogicalObjectLocation;
+	UInt32	 lastLogicalObjectLocation;
+	UInt32	logicalObjectsInObjectBuffer;
+	UInt32	bytesInObjectBuffer;
+};
+
+enum ReadPositionShortFormFlags
+{
+	kSCSIReadPositionShortForm_BeginningOfPartition			= 0x80,
+	kSCSIReadPositionShortForm_EndOfPartition				= 0x40,
+	kSCSIReadPositionShortForm_LogicalObjectCountUnknown	= 0x20,
+	kSCSIReadPositionShortForm_ByteCountUnknown				= 0x10,
+	kSCSIReadPositionShortForm_LogicalObjectLocationUnknown	= 0x04,
+	kSCSIReadPositionShortForm_PositionError				= 0x02
+};
+
 #define SMH_DSP_BUFF_MODE       0x70
 #define SMH_DSP_BUFF_MODE_OFF   0x00
 #define SMH_DSP_BUFF_MODE_ON    0x10
@@ -87,6 +107,7 @@ public:
 	IOReturn Space(SCSISpaceCode, int);
 	IOReturn Load(void);
 	IOReturn Unload(void);
+	IOReturn ReadPosition(SCSI_ReadPositionShortForm *, bool);
 private:
 	int tapeNumber;
 	

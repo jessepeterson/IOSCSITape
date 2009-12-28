@@ -8,6 +8,7 @@
 #include <IOKit/scsi/SCSICommandOperationCodes.h>
 
 #include "IOSCSITape.h"
+#include "custom_mtio.h"
 
 #define GROW_FACTOR 10
 #define SCSI_MOTION_TIMEOUT   (kThirtySecondTimeoutInMS * 2 * 5)
@@ -250,6 +251,7 @@ int st_ioctl(dev_t dev, u_long cmd, caddr_t data, int fflag, struct proc *p)
 	IOSCSITape *st = IOSCSITape::devices[minor(dev)];
 	struct mtop *mt = (struct mtop *) data;
 	struct mtget *g = (struct mtget *) data;
+	SCSI_ReadPositionShortForm pos = { 0 };
 	
 	switch (cmd)
 	{
@@ -277,6 +279,18 @@ int st_ioctl(dev_t dev, u_long cmd, caddr_t data, int fflag, struct proc *p)
 				default:
 					return EINVAL;
 			}
+		case MTIOCRDSPOS:
+		case MTIOCRDHPOS:
+			if (st->ReadPosition(&pos, ((cmd == MTIOCRDSPOS) ? false : true)) == kIOReturnSuccess)
+			{
+				if (pos.flags & kSCSIReadPositionShortForm_LogicalObjectLocationUnknown)
+					return (ENOTSUP);
+				
+				*(unsigned int *)data = pos.firstLogicalObjectLocation;
+				
+				return KERN_SUCCESS;
+			}
+			return ENODEV;
 		default:
 			return ENOTTY;
 	}
@@ -577,6 +591,73 @@ IOReturn
 IOSCSITape::Unload(void)
 {
 	return LoadUnload(0);
+}
+
+IOReturn
+IOSCSITape::ReadPosition(SCSI_ReadPositionShortForm *readPos, bool vendor)
+{
+	SCSITaskIdentifier		task			= NULL;
+	IOReturn				status			= kIOReturnError;
+	SCSITaskStatus			taskStatus		= kSCSITaskStatus_DeviceNotResponding;
+	IOMemoryDescriptor *	dataBuffer		= NULL;
+	UInt8					readPosData[20] = { 0 };
+	
+	dataBuffer = IOMemoryDescriptor::withAddress(&readPosData, 
+												 sizeof(readPosData), 
+												 kIODirectionIn);
+	
+	require((dataBuffer != 0), ErrorExit);
+	
+	task = GetSCSITask();
+	
+	require((task != 0), ErrorExit);
+	
+	if (READ_POSITION(task, 
+					  dataBuffer, 
+					  (vendor ? kSCSIReadPositionServiceAction_ShortFormVendorSpecific : kSCSIReadPositionServiceAction_ShortFormBlockID), 
+					  0x0, 
+					  0x00) == true)
+	{
+		taskStatus = DoSCSICommand(task, SCSI_NOMOTION_TIMEOUT);
+	}
+	
+	if (taskStatus == kSCSITaskStatus_GOOD)
+	{
+		readPos->flags = readPosData[0];
+		readPos->partitionNumber = readPosData[1];
+		
+		readPos->firstLogicalObjectLocation =
+			(readPosData[4]  << 24) |
+			(readPosData[5]  << 16) |
+			(readPosData[6]  <<  8) |
+			 readPosData[7];
+		
+		readPos->lastLogicalObjectLocation =
+			(readPosData[8]  << 24) |
+			(readPosData[9]  << 16) |
+			(readPosData[10] <<  8) |
+			 readPosData[11];
+		
+		readPos->logicalObjectsInObjectBuffer =
+			(readPosData[13] << 16) |
+			(readPosData[14] <<  8) |
+			 readPosData[15];
+		
+		readPos->bytesInObjectBuffer =
+			(readPosData[16] << 24) |
+			(readPosData[17] << 16) |
+			(readPosData[18] <<  8) |
+			 readPosData[19];
+		
+		status = kIOReturnSuccess;
+	}
+	
+	ReleaseSCSITask(task);
+	dataBuffer->release();
+	
+ErrorExit:
+	
+	return status;
 }
 
 #if 0

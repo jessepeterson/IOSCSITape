@@ -17,6 +17,12 @@
 #define super IOSCSIPrimaryCommandsDevice
 OSDefineMetaClassAndStructors(IOSCSITape, IOSCSIPrimaryCommandsDevice)
 
+#if 0
+#pragma mark -
+#pragma mark Initialization & support
+#pragma mark -
+#endif /* 0 */
+
 /* The one really global operation of this kext is to register for a
  * character device major number. The constructors and destructors
  * get called on kext load/unload making it a great candidate for
@@ -118,39 +124,18 @@ IOSCSITape::ClearDeviceMinorNumber(void)
 	tapeNumber = 0;
 }
 
-UInt32
-IOSCSITape::GetInitialPowerState(void)
-{
-	return 0;
-}
-
-void
-IOSCSITape::HandlePowerChange(void)
-{
-}
-
-void
-IOSCSITape::HandleCheckPowerState(void)
-{
-}
-
-void
-IOSCSITape::TicklePowerManager(void)
-{
-}
-
 bool
 IOSCSITape::InitializeDeviceSupport(void)
 {
 	if (FindDeviceMinorNumber())
 	{
 		cdev_node = devfs_make_node(
-			makedev(CdevMajorIniter.majorNumber, tapeNumber), 
-			DEVFS_CHAR,
-			UID_ROOT,
-			GID_OPERATOR,
-			0664,
-			TAPE_FORMAT, tapeNumber);
+									makedev(CdevMajorIniter.majorNumber, tapeNumber), 
+									DEVFS_CHAR,
+									UID_ROOT,
+									GID_OPERATOR,
+									0664,
+									TAPE_FORMAT, tapeNumber);
 		
 		if (cdev_node)
 		{
@@ -159,7 +144,7 @@ IOSCSITape::InitializeDeviceSupport(void)
 			return true;
 		}
 	}
-
+	
 	return false;
 }
 
@@ -192,6 +177,39 @@ IOSCSITape::StopDeviceSupport(void)
 	ClearDeviceMinorNumber();
 }
 
+bool
+IOSCSITape::ClearNotReadyStatus(void)
+{
+	return false;
+}
+
+#if 0
+#pragma mark -
+#pragma mark IOKit power management
+#pragma mark -
+#endif /* 0 */
+
+UInt32
+IOSCSITape::GetInitialPowerState(void)
+{
+	return 0;
+}
+
+void
+IOSCSITape::HandlePowerChange(void)
+{
+}
+
+void
+IOSCSITape::HandleCheckPowerState(void)
+{
+}
+
+void
+IOSCSITape::TicklePowerManager(void)
+{
+}
+
 void
 IOSCSITape::TerminateDeviceSupport(void)
 {
@@ -201,12 +219,6 @@ UInt32
 IOSCSITape::GetNumberOfPowerStateTransitions(void)
 {
 	return 0;
-}
-
-bool
-IOSCSITape::ClearNotReadyStatus(void)
-{
-	return false;
 }
 
 #if 0

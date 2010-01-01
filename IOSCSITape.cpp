@@ -4,6 +4,7 @@
 #include <sys/errno.h>
 #include <sys/mtio.h>
 #include <sys/ioctl.h>
+#include <sys/uio.h>
 
 #include <IOKit/scsi/SCSICommandOperationCodes.h>
 
@@ -22,6 +23,36 @@ OSDefineMetaClassAndStructors(IOSCSITape, IOSCSIPrimaryCommandsDevice)
 #pragma mark Initialization & support
 #pragma mark -
 #endif /* 0 */
+
+/*
+ *  Support for BSD-IOKit data exchange. Most of this is from
+ *  IOStorageFamily-92.9 (IOMediaBSDClient.cpp).
+ */
+
+/* Note: get_aiotask() is in the "unsupported" KPI */
+extern "C" task_t get_aiotask(void);
+
+inline task_t get_user_task(void)
+{
+	task_t task;
+	
+	task = get_aiotask();
+	if (task == 0)  task = current_task();
+	
+	return task;
+}
+
+IOMemoryDescriptor *IOMemoryDescriptorFromUIO(struct uio *uio)
+{
+	return IOMemoryDescriptor::withOptions(
+		uio,
+		uio_iovcnt(uio),
+		0,
+		(uio_isuserspace(uio)) ? get_user_task() : kernel_task,
+		kIOMemoryTypeUIO | kIOMemoryAsReference |
+			((uio_rw(uio) == UIO_READ) ? kIODirectionIn : kIODirectionInOut)
+		);
+}
 
 /* The one really global operation of this kext is to register for a
  * character device major number. The constructors and destructors

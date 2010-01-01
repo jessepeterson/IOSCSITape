@@ -279,15 +279,53 @@ int st_ioctl(dev_t dev, u_long cmd, caddr_t data, int fflag, struct proc *p)
 			
 			return KERN_SUCCESS;
 		case MTIOCTOP:
-			// int number = mt->mt_count;
+			int number = mt->mt_count;
 			
 			switch (mt->mt_op)
 			{
+				case MTBSF:
+					number = -number;
+				case MTFSF:
+					if (st->Space(kSCSISpaceCode_Filemarks, number) == kIOReturnSuccess)
+						return KERN_SUCCESS;
+					else
+						return ENODEV;
+					break;
+				case MTBSR:
+					number = -number;
+				case MTFSR:
+					if (st->Space(kSCSISpaceCode_LogicalBlocks, number) == kIOReturnSuccess)
+						return KERN_SUCCESS;
+					else
+						return ENODEV;
+					break;
 				case MTREW:
 					if (st->Rewind() == kIOReturnSuccess)
 						return KERN_SUCCESS;
 					else
 						return ENODEV;
+					break;
+				case MTWEOF:
+					if (st->WriteFilemarks(number) == kIOReturnSuccess)
+						return KERN_SUCCESS;
+					else
+						return ENODEV;
+					break;
+				case MTOFFL:
+					if (st->Unload() == kIOReturnSuccess)
+						return KERN_SUCCESS;
+					else
+						return ENODEV;
+					break;
+				case MTNOP:
+					return KERN_SUCCESS;
+					break;
+				case MTEOM:
+					if (st->Space(kSCSISpaceCode_EndOfData, number) == kIOReturnSuccess)
+						return KERN_SUCCESS;
+					else
+						return ENODEV;
+					break;
 				default:
 					return EINVAL;
 			}

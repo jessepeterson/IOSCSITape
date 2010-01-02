@@ -214,6 +214,15 @@ IOSCSITape::ClearNotReadyStatus(void)
 	return false;
 }
 
+bool
+IOSCSITape::IsFixedBlockSize(void)
+{
+	if (blksize == 0)
+		return false;
+	else
+		return true;
+}
+
 #if 0
 #pragma mark -
 #pragma mark IOKit power management
@@ -286,7 +295,29 @@ int st_close(dev_t dev, int flags, int devtype, struct proc *p)
 
 int st_readwrite(dev_t dev, struct uio *uio, int ioflag)
 {
-	return (ENODEV);
+	IOSCSITape			*st			= IOSCSITape::devices[minor(dev)];
+	IOMemoryDescriptor	*dataBuffer	= IOMemoryDescriptorFromUIO(uio);
+	int					status		= ENOSYS;
+	IOReturn			opStatus	= kIOReturnError;
+	int					lastRealizedBytes = 0;
+	
+	if (dataBuffer == 0)
+		return ENOMEM;
+	
+	dataBuffer->prepare();
+	
+	opStatus = st->ReadWrite(dataBuffer, &lastRealizedBytes);
+	
+	dataBuffer->complete();
+	dataBuffer->release();
+	
+	if (opStatus == kIOReturnSuccess)
+	{
+		uio_setresid(uio, uio_resid(uio) - lastRealizedBytes);
+		status = KERN_SUCCESS;
+	}
+	
+	return status;
 }
 
 int st_ioctl(dev_t dev, u_long cmd, caddr_t data, int fflag, struct proc *p)
@@ -735,6 +766,70 @@ IOSCSITape::ReadPosition(SCSI_ReadPositionShortForm *readPos, bool vendor)
 	
 	ReleaseSCSITask(task);
 	dataBuffer->release();
+	
+ErrorExit:
+	
+	return status;
+}
+
+IOReturn
+IOSCSITape::ReadWrite(IOMemoryDescriptor *dataBuffer, int *realizedBytes)
+{
+	SCSITaskIdentifier	task			= NULL;
+	IOReturn			status			= kIOReturnNoResources;
+	SCSITaskStatus		taskStatus		= kSCSITaskStatus_No_Status;
+	bool				cmdStatus		= false;
+	int					transferSize	= 0;
+	
+	require((dataBuffer != 0), ErrorExit);
+	
+	transferSize = dataBuffer->getLength();
+
+	if (IsFixedBlockSize())
+	{
+		if (transferSize % blksize)
+		{
+			STATUS_LOG("must be multiple of block size");
+			return kIOReturnNotAligned;
+		}
+		
+		transferSize /= blksize;
+	}
+	
+	task = GetSCSITask();
+	require((task != 0), ErrorExit);
+	
+	if (dataBuffer->getDirection() == kIODirectionIn)
+	{
+		cmdStatus = READ_6(
+			task, 
+			dataBuffer, 
+			blksize, 
+			0x0,
+			IsFixedBlockSize() ? 0x1 : 0x0,
+			transferSize,
+			0x00);
+	}
+	else
+	{
+		cmdStatus = WRITE_6(
+			task, 
+			dataBuffer, 
+			blksize, 
+			IsFixedBlockSize() ? 0x1 : 0x0,
+			transferSize, 
+			0x00);
+	}
+	
+	if (cmdStatus == true)
+		taskStatus = DoSCSICommand(task, SCSI_MOTION_TIMEOUT);
+		
+	*realizedBytes  = GetRealizedDataTransferCount(task);
+
+	if (taskStatus == kSCSITaskStatus_GOOD)
+		status = kIOReturnSuccess;
+	
+	ReleaseSCSITask(task);
 	
 ErrorExit:
 	

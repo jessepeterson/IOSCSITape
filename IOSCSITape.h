@@ -108,6 +108,7 @@ public:
 	IOReturn Load(void);
 	IOReturn Unload(void);
 	IOReturn ReadPosition(SCSI_ReadPositionShortForm *, bool);
+	IOReturn ReadWrite(IOMemoryDescriptor *, int *);
 private:
 	int tapeNumber;
 	
@@ -123,6 +124,8 @@ private:
 	bool GrowDeviceMinorNumberMemory(void);
 	void ClearDeviceMinorNumber(void);
 	
+	bool IsFixedBlockSize(void);
+
 	/* pure function overrides from IOSCSIPrimaryCommandsDevice */
 	UInt32 GetInitialPowerState(void);
 	void HandlePowerChange(void);

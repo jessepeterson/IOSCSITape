@@ -28,27 +28,13 @@ OSDefineMetaClassAndStructors(IOSCSITape, IOSCSIPrimaryCommandsDevice)
  *  Support for BSD-IOKit data exchange. Most of this is from
  *  IOStorageFamily-92.9 (IOMediaBSDClient.cpp).
  */
-
-/* Note: get_aiotask() is in the "unsupported" KPI */
-extern "C" task_t get_aiotask(void);
-
-inline task_t get_user_task(void)
-{
-	task_t task;
-	
-	task = get_aiotask();
-	if (task == 0)  task = current_task();
-	
-	return task;
-}
-
 IOMemoryDescriptor *IOMemoryDescriptorFromUIO(struct uio *uio)
 {
 	return IOMemoryDescriptor::withOptions(
 		uio,
 		uio_iovcnt(uio),
 		0,
-		(uio_isuserspace(uio)) ? get_user_task() : kernel_task,
+		(uio_isuserspace(uio)) ? current_task() : kernel_task,
 		kIOMemoryTypeUIO | kIOMemoryAsReference |
 			((uio_rw(uio) == UIO_READ) ? kIODirectionIn : kIODirectionInOut)
 		);
@@ -326,6 +312,7 @@ int st_ioctl(dev_t dev, u_long cmd, caddr_t data, int fflag, struct proc *p)
 	struct mtop *mt = (struct mtop *) data;
 	struct mtget *g = (struct mtget *) data;
 	SCSI_ReadPositionShortForm pos = { 0 };
+	int number = mt->mt_count;
 	
 	switch (cmd)
 	{
@@ -341,8 +328,6 @@ int st_ioctl(dev_t dev, u_long cmd, caddr_t data, int fflag, struct proc *p)
 			
 			return KERN_SUCCESS;
 		case MTIOCTOP:
-			int number = mt->mt_count;
-			
 			switch (mt->mt_op)
 			{
 				case MTBSF:

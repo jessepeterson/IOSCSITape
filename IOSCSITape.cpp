@@ -18,6 +18,26 @@
 #define super IOSCSIPrimaryCommandsDevice
 OSDefineMetaClassAndStructors(IOSCSITape, IOSCSIPrimaryCommandsDevice)
 
+char *kSCSISenseKeyDescriptions[] =
+{
+	(char *)"No Sense",
+	(char *)"Recovered Error",
+	(char *)"Not Ready",
+	(char *)"Medium Error",
+	(char *)"Hardware Error",
+	(char *)"Illegal Request",
+	(char *)"Unit Attention",
+	(char *)"Data Protect",
+	(char *)"Blank Check",
+	(char *)"Vendor Specific",
+	(char *)"Copy Aborted",
+	(char *)"Aborted Command",
+	(char *)"Equal",
+	(char *)"Volume Overflow",
+	(char *)"Miscompare",
+	(char *)"(Unknown)"
+};
+
 #if 0
 #pragma mark -
 #pragma mark Initialization & support
@@ -175,6 +195,9 @@ IOSCSITape::StartDeviceSupport(void)
 	
 	GetDeviceDetails();
 	GetDeviceBlockLimits();
+	
+	fileno = -1;
+	blkno = -1;
 }
 
 void
@@ -300,6 +323,25 @@ int st_readwrite(dev_t dev, struct uio *uio, int ioflag)
 	if (opStatus == kIOReturnSuccess)
 	{
 		uio_setresid(uio, uio_resid(uio) - lastRealizedBytes);
+		
+		if (st->blkno != -1)
+		{
+			if (st->IsFixedBlockSize())
+				st->blkno += (lastRealizedBytes / st->blksize);
+			else
+				st->blkno++;
+		}
+
+		status = KERN_SUCCESS;
+	}
+	else if (st->sense_flags & SENSE_FILEMARK)
+	{
+		if (st->fileno != -1)
+		{
+			st->fileno++;
+			st->blkno = 0;
+		}
+		
 		status = KERN_SUCCESS;
 	}
 	
@@ -321,9 +363,10 @@ int st_ioctl(dev_t dev, u_long cmd, caddr_t data, int fflag, struct proc *p)
 			g->mt_type = 0x7;	/* Ultrix compat *//*? */
 			g->mt_blksiz = st->blksize;
 			g->mt_density = st->density;
-			// g->mt_fileno = st->fileno;
-			// g->mt_blkno = st->blkno;
+			g->mt_fileno = st->fileno;
+			g->mt_blkno = st->blkno;
 			g->mt_dsreg = st->flags;	/* report raw driver flags */
+			g->mt_erreg = st->sense_flags;
 			/* TODO: Implement the full mtget struct */
 			
 			return KERN_SUCCESS;
@@ -334,7 +377,15 @@ int st_ioctl(dev_t dev, u_long cmd, caddr_t data, int fflag, struct proc *p)
 					number = -number;
 				case MTFSF:
 					if (st->Space(kSCSISpaceCode_Filemarks, number) == kIOReturnSuccess)
+					{
+						if (st->fileno != -1)
+						{
+							st->fileno += number;
+							st->blkno = 0;
+						}
+						
 						return KERN_SUCCESS;
+					}
 					else
 						return ENODEV;
 					break;
@@ -342,13 +393,22 @@ int st_ioctl(dev_t dev, u_long cmd, caddr_t data, int fflag, struct proc *p)
 					number = -number;
 				case MTFSR:
 					if (st->Space(kSCSISpaceCode_LogicalBlocks, number) == kIOReturnSuccess)
+					{
+						if (st->blkno != -1)
+							st->blkno += number;
+						
 						return KERN_SUCCESS;
+					}
 					else
 						return ENODEV;
 					break;
 				case MTREW:
 					if (st->Rewind() == kIOReturnSuccess)
+					{
+						st->fileno = 0;
+						st->blkno = 0;
 						return KERN_SUCCESS;
+					}
 					else
 						return ENODEV;
 					break;
@@ -372,6 +432,21 @@ int st_ioctl(dev_t dev, u_long cmd, caddr_t data, int fflag, struct proc *p)
 						return KERN_SUCCESS;
 					else
 						return ENODEV;
+					break;
+				case MTSETBSIZ:
+					if ((number > 0) &&
+						(st->blkmin && st->blkmax) &&
+						(number < st->blkmin ||
+						 number > st->blkmax))
+					{
+						return (EINVAL);
+					}
+					
+					if (st->SetBlockSize(number) == kIOReturnSuccess)
+						return KERN_SUCCESS;
+					else
+						return (ENODEV);
+
 					break;
 				default:
 					return EINVAL;
@@ -415,6 +490,7 @@ IOSCSITape::DoSCSICommand(
 	require((request != 0), ErrorExit);
 	
 	serviceResponse = SendCommand(request, timeoutDuration);
+	sense_flags = 0;
 	
 	if (serviceResponse != kSCSIServiceResponse_TASK_COMPLETE)
 	{
@@ -427,7 +503,8 @@ IOSCSITape::DoSCSICommand(
 		
 		if (taskStatus == kSCSITaskStatus_CHECK_CONDITION)
 		{
-			STATUS_LOG("unhandled CHECK CONDITION");
+			/* Get and interpret SCSI SENSE information */
+			GetSense(request);
 		}
 		else if (taskStatus != kSCSITaskStatus_GOOD)
 		{
@@ -438,6 +515,112 @@ IOSCSITape::DoSCSICommand(
 ErrorExit:
 	
 	return taskStatus;
+}
+
+/*
+ *  GetSenseInformation
+ *
+ *  Attempt to get SCSI sense information either from the Auto sense
+ *  mechanism or by querying manually.
+ */
+void
+IOSCSITape::GetSense(SCSITaskIdentifier request)
+{
+	SCSI_Sense_Data		senseBuffer = { 0 };
+	bool				validSense = false;
+	SCSIServiceResponse	serviceResponse = kSCSIServiceResponse_SERVICE_DELIVERY_OR_TARGET_FAILURE;
+	
+	IOMemoryDescriptor *bufferDesc = IOMemoryDescriptor::withAddress((void *)&senseBuffer, 
+																	 sizeof(senseBuffer), 
+																	 kIODirectionIn);
+	
+	if (GetTaskStatus(request) == kSCSITaskStatus_CHECK_CONDITION)
+	{
+		validSense = GetAutoSenseData(request, &senseBuffer);
+		
+		if (validSense == false)
+		{
+			if (REQUEST_SENSE(request, bufferDesc, kSenseDefaultSize, 0) == true)
+				serviceResponse = SendCommand(request, kTenSecondTimeoutInMS);
+			
+			if (serviceResponse == kSCSIServiceResponse_TASK_COMPLETE)
+				validSense = true;
+		}
+		
+		if (validSense == true)
+			InterpretSense(&senseBuffer);
+		else
+			STATUS_LOG("invalid or unretrievable SCSI SENSE");
+	}
+	
+	bufferDesc->release();
+}
+
+void
+IOSCSITape::InterpretSense(SCSI_Sense_Data *sense)
+{
+	uint8_t key = sense->SENSE_KEY & kSENSE_KEY_Mask;
+	uint8_t asc = sense->ADDITIONAL_SENSE_CODE;
+	uint8_t ascq = sense->ADDITIONAL_SENSE_CODE_QUALIFIER;
+
+	if ((sense->VALID_RESPONSE_CODE & kSENSE_RESPONSE_CODE_Mask) == kSENSE_RESPONSE_CODE_Current_Errors)
+	{
+		/* current errors, fixed format - 0x70 */
+		
+		// sense->VALID_RESPONSE_CODE & kSENSE_DATA_VALID
+
+		if (key  == kSENSE_KEY_NOT_READY &&
+			asc  == 0x04 &&
+			ascq == 0x01)
+		{
+			STATUS_LOG("LOGICAL UNIT IS IN PROCESS OF BECOMING READY");
+			sense_flags |= SENSE_NOTREADY;
+		}
+		else if (key  == kSENSE_KEY_NO_SENSE &&
+				 asc  == 0x00 &&
+				 ascq == 0x04)
+		{
+			STATUS_LOG("BEGINNING-OF-PARTITION/MEDIUM DETECTED");
+			
+			sense_flags |= SENSE_BOM;
+		}
+		else if (key  == kSENSE_KEY_BLANK_CHECK &&
+				 asc  == 0x00 &&
+				 ascq == 0x05)
+				/* sense->SENSE_KEY & kSENSE_EOM_Mask */
+		{
+			STATUS_LOG("END-OF-DATA DETECTED");
+			
+			sense_flags |= SENSE_EOD;
+		}
+		else if ((sense->SENSE_KEY & kSENSE_FILEMARK_Mask) ||
+				 (key  == kSENSE_KEY_NO_SENSE &&
+				  asc  == 0x00 &&
+				  ascq == 0x01))
+		{
+			STATUS_LOG("FILEMARK DETECTED");
+			
+			sense_flags |= SENSE_FILEMARK;
+		}
+		else
+		{
+			STATUS_LOG("SENSE: %s (Key: 0x%X, ASC: 0x%02X, ASCQ: 0x%02X)",
+					   kSCSISenseKeyDescriptions[key], key, asc, ascq);
+
+			if (sense->SENSE_KEY & kSENSE_ILI_Mask)
+				STATUS_LOG("SENSE: Incorrect Length Indicator (ILI)");
+
+			int i;
+			unsigned char *bytes = (unsigned char *)sense;
+			
+			IOLog("SCSI SENSE DATA: ");
+			for (i = 0; i < sizeof(SCSI_Sense_Data); i++)
+			{
+				IOLog("0x%02x ", (int)bytes[i]);
+			}
+			IOLog("\n");
+		}
+	}
 }
 
 IOReturn
@@ -528,6 +711,9 @@ IOSCSITape::GetDeviceDetails(void)
 	
 	if (taskStatus == kSCSITaskStatus_GOOD)
 	{
+		/* copy mode data for next MODE SELECT */
+		bcopy(&modeData, &lastModeData, sizeof(SCSI_ModeSense_Default));
+		
 		blksize = 
 			(modeData.descriptor.BLOCK_LENGTH[0] << 16) |
 			(modeData.descriptor.BLOCK_LENGTH[1] <<  8) |
@@ -554,6 +740,66 @@ IOSCSITape::GetDeviceDetails(void)
 	dataBuffer->release();
 	
 ErrorExit:
+	
+	return status;
+}
+
+IOReturn
+IOSCSITape::SetDeviceDetails(SCSI_ModeSense_Default *modeData)
+{
+	IOReturn				status		= kIOReturnError;
+	IOMemoryDescriptor *	dataBuffer	= NULL;
+	SCSITaskIdentifier		task		= NULL;
+	SCSITaskStatus			taskStatus	= kSCSITaskStatus_DeviceNotResponding;
+	
+	dataBuffer = IOMemoryDescriptor::withAddress(modeData,
+												 sizeof(SCSI_ModeSense_Default),
+												 kIODirectionOut);
+	
+	require((dataBuffer != 0), ErrorExit);
+	
+	task = GetSCSITask();
+	
+	require((task != 0), ErrorExit);
+	
+	if (MODE_SELECT_6(task, 
+					  dataBuffer, 
+					  0x0, // PF
+					  0x0, // SP
+					  sizeof(SCSI_ModeSense_Default), 
+					  0x00) == true)
+	{
+		taskStatus = DoSCSICommand(task, SCSI_NOMOTION_TIMEOUT);
+	}
+	
+	if (taskStatus == kSCSITaskStatus_GOOD)
+	{
+		status = kIOReturnSuccess;
+	}
+	
+	ReleaseSCSITask(task);
+	dataBuffer->release();
+	
+ErrorExit:
+	
+	return status;
+}
+
+IOReturn
+IOSCSITape::SetBlockSize(int size)
+{
+	IOReturn				status	= kIOReturnError;
+	SCSI_ModeSense_Default	newMode;
+	
+	bcopy(&lastModeData, &newMode, sizeof(SCSI_ModeSense_Default));
+	
+	newMode.header.MODE_DATA_LENGTH = 0;
+	newMode.descriptor.BLOCK_LENGTH[0] = (size >> 16) & 0xFF;
+	newMode.descriptor.BLOCK_LENGTH[1] = (size >>  8) & 0xFF;
+	newMode.descriptor.BLOCK_LENGTH[2] =  size        & 0xFF;
+	
+	if ((status = SetDeviceDetails(&newMode)) == kIOReturnSuccess)
+		GetDeviceDetails();
 	
 	return status;
 }

@@ -86,10 +86,16 @@ enum ReadPositionShortFormFlags
 #define ST_READONLY			0x02
 #define ST_BUFF_MODE		0x04
 
+#define SENSE_FILEMARK		0x01
+#define SENSE_EOD			0x02
+#define SENSE_BOM			0x04
+#define SENSE_ILI			0x08
+#define SENSE_NOTREADY		0x10
+
 class IOSCSITape : public IOSCSIPrimaryCommandsDevice {
 	OSDeclareDefaultStructors(IOSCSITape)
 public:
-	unsigned int flags;
+	unsigned int flags, sense_flags;
 	static IOSCSITape **devices;
 	
 	int blksize;
@@ -98,6 +104,12 @@ public:
 	int blkmin;
 	int blkmax;
 	
+	int blkno;
+	int fileno;
+
+	/* Utilities */
+	bool IsFixedBlockSize(void);
+
 	/* SCSI Operations */
 	IOReturn Rewind(void);
 	IOReturn GetDeviceDetails(void);
@@ -109,11 +121,16 @@ public:
 	IOReturn Unload(void);
 	IOReturn ReadPosition(SCSI_ReadPositionShortForm *, bool);
 	IOReturn ReadWrite(IOMemoryDescriptor *, int *);
+	IOReturn SetDeviceDetails(SCSI_ModeSense_Default *);
+	IOReturn SetBlockSize(int);
 private:
 	int tapeNumber;
 	
 	/* SCSI Operations */
+	SCSI_ModeSense_Default lastModeData;
 	SCSITaskStatus DoSCSICommand(SCSITaskIdentifier, UInt32);
+	void GetSense(SCSITaskIdentifier);
+	void InterpretSense(SCSI_Sense_Data *);
 	IOReturn LoadUnload(int);
 
 	/* utilities for major/minor to instance tracking */
@@ -124,8 +141,6 @@ private:
 	bool GrowDeviceMinorNumberMemory(void);
 	void ClearDeviceMinorNumber(void);
 	
-	bool IsFixedBlockSize(void);
-
 	/* pure function overrides from IOSCSIPrimaryCommandsDevice */
 	UInt32 GetInitialPowerState(void);
 	void HandlePowerChange(void);

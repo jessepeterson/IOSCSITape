@@ -414,7 +414,12 @@ int st_ioctl(dev_t dev, u_long cmd, caddr_t data, int fflag, struct proc *p)
 					break;
 				case MTWEOF:
 					if (st->WriteFilemarks(number) == kIOReturnSuccess)
+					{
+						st->fileno += number;
+						st->blkno = 0;
+						
 						return KERN_SUCCESS;
+					}
 					else
 						return ENODEV;
 					break;

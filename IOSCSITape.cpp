@@ -1060,7 +1060,7 @@ IOSCSITape::ReadWrite(IOMemoryDescriptor *dataBuffer, int *realizedBytes)
 	if (cmdStatus == true)
 		taskStatus = DoSCSICommand(task, SCSI_MOTION_TIMEOUT);
 		
-	*realizedBytes  = GetRealizedDataTransferCount(task);
+	*realizedBytes = GetRealizedDataTransferCount(task);
 
 	if (taskStatus == kSCSITaskStatus_GOOD)
 		status = kIOReturnSuccess;

@@ -411,7 +411,16 @@ int st_close(dev_t dev, int flags, int devtype, struct proc *p)
 {
 	IOSCSITape *st = IOSCSITape::devices[minor(dev)];
 
-	/* TODO: Assure two filemarks after writes as a pseudo-EOD. */
+	/* if the last command was a write then write 2x EOF markers and
+	 * backspace over 1 (for the next write) */
+	if (st->flags & ST_WRITTEN)
+	{
+		st_write_filemarks(st, 2);
+		st_space(st, kSCSISpaceCode_Filemarks, -1);
+		
+		st->flags &= ~ST_WRITTEN;
+	}
+	
 	st->flags &= ~ST_DEVOPEN;
 	
 	return KERN_SUCCESS;
@@ -574,7 +583,19 @@ IOSCSITape::DoSCSICommand(
 		{
 			STATUS_LOG("unknown task status: 0x%x", taskStatus);
 		}
+		else if (taskStatus == kSCSITaskStatus_GOOD)
+		{
+			/* setup flags for device file closing */
+			if (flags & ST_WRITTEN_TOGGLE)
+				flags |= ST_WRITTEN;
+			else
+				flags &= ~ST_WRITTEN;
+		}
 	}
+	
+	/* clear the write toggle bit in case the next command is not a
+	 * write */
+	flags &= ~ST_WRITTEN_TOGGLE;
 	
 ErrorExit:
 	
@@ -926,7 +947,9 @@ IOSCSITape::WriteFilemarks(int count)
 	task = GetSCSITask();
 	
 	require((task != 0), ErrorExit);
-	
+
+	flags |= ST_WRITTEN_TOGGLE;
+
 	if (WRITE_FILEMARKS_6(task, 0x0, 0x0, count, 0) == true)
 		taskStatus = DoSCSICommand(task, SCSI_MOTION_TIMEOUT);
 	
@@ -1102,6 +1125,8 @@ IOSCSITape::ReadWrite(IOMemoryDescriptor *dataBuffer, int *realizedBytes)
 			IsFixedBlockSize() ? 0x1 : 0x0,
 			transferSize, 
 			0x00);
+
+		flags |= ST_WRITTEN_TOGGLE;
 	}
 	
 	if (cmdStatus == true)

@@ -94,6 +94,8 @@ enum ReadPositionShortFormFlags
 #define ST_DEVOPEN			0x01
 #define ST_READONLY			0x02
 #define ST_BUFF_MODE		0x04
+#define ST_WRITTEN			0x08
+#define ST_WRITTEN_TOGGLE	0x10
 
 #define SENSE_FILEMARK		0x01
 #define SENSE_EOD			0x02

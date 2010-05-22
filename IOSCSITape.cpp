@@ -1,3 +1,12 @@
+/*
+ *  IOSCSITape.cpp
+ *  IOSCSITape
+ *
+ *  This software is licensed under an MIT license. See LICENSE.txt.
+ *  Created by Jesse Peterson on 12/13/09.
+ *
+ */
+
 #include <AssertMacros.h>
 #include <sys/conf.h>
 #include <miscfs/devfs/devfs.h>
@@ -60,10 +69,8 @@ IOMemoryDescriptor *IOMemoryDescriptorFromUIO(struct uio *uio)
 		);
 }
 
-/* The one really global operation of this kext is to register for a
- * character device major number. The constructors and destructors
- * get called on kext load/unload making it a great candidate for
- * IOKit-instance-spaning devices. */
+/* The constructors and destructors get called on kext load/unload
+ * used for IOKit-instance-spaning devices. */
 class CdevMajorIniter
 {
 public:
@@ -278,7 +285,8 @@ IOSCSITape::GetNumberOfPowerStateTransitions(void)
 
 /* The job of these tape driver operations, generally, is to adapt the
  * lower level SCSI operations and convert the results and potential
- * SENSE information into POSIX-ish return codes and results. */
+ * SENSE information into POSIX-ish return codes and results as well
+ * as manage driver state like blkno and fileno. */
 
 int st_rewind(IOSCSITape *st)
 {

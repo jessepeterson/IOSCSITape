@@ -2,8 +2,8 @@
  *  custom_mtio.h
  *  IOSCSITape
  *
+ *  This software is licensed under an MIT license. See LICENSE.txt.
  *  Created by Jesse Peterson on 12/13/09.
- *  Copyright 2009 __MyCompanyName__. All rights reserved.
  *
  */
 

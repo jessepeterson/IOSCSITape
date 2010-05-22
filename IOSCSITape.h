@@ -1,3 +1,12 @@
+/*
+ *  IOSCSITape.h
+ *  IOSCSITape
+ *
+ *  This software is licensed under an MIT license. See LICENSE.txt.
+ *  Created by Jesse Peterson on 12/13/09.
+ *
+ */
+
 #include <IOKit/scsi/IOSCSIMultimediaCommandsDevice.h>
 #include <IOKit/scsi/SCSICmds_MODE_Definitions.h>
 

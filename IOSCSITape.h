@@ -117,8 +117,7 @@ public:
 	IOReturn TestUnitReady(void);
 	IOReturn WriteFilemarks(int);
 	IOReturn Space(SCSISpaceCode, int);
-	IOReturn Load(void);
-	IOReturn Unload(void);
+	IOReturn LoadUnload(int);
 	IOReturn ReadPosition(SCSI_ReadPositionShortForm *, bool);
 	IOReturn ReadWrite(IOMemoryDescriptor *, int *);
 	IOReturn SetDeviceDetails(SCSI_ModeSense_Default *);
@@ -131,7 +130,6 @@ private:
 	SCSITaskStatus DoSCSICommand(SCSITaskIdentifier, UInt32);
 	void GetSense(SCSITaskIdentifier);
 	void InterpretSense(SCSI_Sense_Data *);
-	IOReturn LoadUnload(int);
 
 	/* utilities for major/minor to instance tracking */
 	void *cdev_node;
@@ -221,6 +219,12 @@ private:
 		SCSICmdField1Bit,
 		SCSICmdField1Byte);
 };
+
+int st_rewind(IOSCSITape *st);
+int st_space(IOSCSITape *st, SCSISpaceCode type, int number);
+int st_write_filemarks(IOSCSITape *st, int number);
+int st_unload(IOSCSITape *st);
+int st_rdpos(IOSCSITape *st, bool vendor, unsigned int *data);
 
 int st_open(dev_t dev, int flags, int devtype, struct proc *p);
 int st_close(dev_t dev, int flags, int devtype, struct proc *p);

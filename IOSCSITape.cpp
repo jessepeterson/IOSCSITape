@@ -272,6 +272,113 @@ IOSCSITape::GetNumberOfPowerStateTransitions(void)
 
 #if 0
 #pragma mark -
+#pragma mark Tape driver operations
+#pragma mark -
+#endif /* 0 */
+
+/* The job of these tape driver operations, generally, is to adapt the
+ * lower level SCSI operations and convert the results and potential
+ * SENSE information into POSIX-ish return codes and results. */
+
+int st_rewind(IOSCSITape *st)
+{
+	if (st->Rewind() == kIOReturnSuccess)
+	{
+		st->fileno = 0;
+		st->blkno = 0;
+		return KERN_SUCCESS;
+	}
+	
+	return ENODEV;
+}
+
+int st_space(IOSCSITape *st, SCSISpaceCode type, int number)
+{
+	if (st->Space(type, number) == kIOReturnSuccess)
+	{
+		if (st->fileno != -1)
+		{
+			switch (type)
+			{
+				case kSCSISpaceCode_Filemarks:
+					st->fileno += number;
+					st->blkno = 0;
+					break;
+				case kSCSISpaceCode_LogicalBlocks:
+					st->blkno += number;
+					break;
+				case kSCSISpaceCode_EndOfData:
+					st->fileno = -1;
+					st->blkno = -1;
+					break;
+			}
+		}
+		
+		return KERN_SUCCESS;
+	}
+	
+	return ENODEV;
+}
+
+int st_write_filemarks(IOSCSITape *st, int number)
+{
+	if (st->WriteFilemarks(number) == kIOReturnSuccess)
+	{
+		if (st->fileno != -1)
+		{
+			st->fileno += number;
+			st->blkno = 0;
+		}
+		
+		return KERN_SUCCESS;
+	}
+	
+	return ENODEV;
+}
+
+int st_unload(IOSCSITape *st)
+{
+	if (st->LoadUnload(0) == kIOReturnSuccess)
+		return KERN_SUCCESS;
+	
+	return ENODEV;
+}
+
+int st_rdpos(IOSCSITape *st, bool vendor, unsigned int *data)
+{
+	SCSI_ReadPositionShortForm pos = { 0 };
+	
+	if (st->ReadPosition(&pos, vendor) == kIOReturnSuccess)
+	{
+		if (pos.flags & kSCSIReadPositionShortForm_LogicalObjectLocationUnknown)
+			return (ENOTSUP);
+		
+		*data = pos.firstLogicalObjectLocation;
+		
+		return KERN_SUCCESS;
+	}
+	
+	return ENODEV;	
+}
+
+int st_set_blocksize(IOSCSITape *st, int number)
+{
+	if ((number > 0) &&
+		(st->blkmin || st->blkmax) &&
+		(number < st->blkmin ||
+		 number > st->blkmax))
+	{
+		return (EINVAL);
+	}
+	
+	if (st->SetBlockSize(number) == kIOReturnSuccess)
+		return KERN_SUCCESS;
+	
+	return (ENODEV);	
+}
+
+#if 0
+#pragma mark -
 #pragma mark Character device system calls
 #pragma mark -
 #endif /* 0 */
@@ -353,8 +460,8 @@ int st_ioctl(dev_t dev, u_long cmd, caddr_t data, int fflag, struct proc *p)
 	IOSCSITape *st = IOSCSITape::devices[minor(dev)];
 	struct mtop *mt = (struct mtop *) data;
 	struct mtget *g = (struct mtget *) data;
-	SCSI_ReadPositionShortForm pos = { 0 };
 	int number = mt->mt_count;
+	int error = 0;
 	
 	switch (cmd)
 	{
@@ -376,104 +483,45 @@ int st_ioctl(dev_t dev, u_long cmd, caddr_t data, int fflag, struct proc *p)
 				case MTBSF:
 					number = -number;
 				case MTFSF:
-					if (st->Space(kSCSISpaceCode_Filemarks, number) == kIOReturnSuccess)
-					{
-						if (st->fileno != -1)
-						{
-							st->fileno += number;
-							st->blkno = 0;
-						}
-						
-						return KERN_SUCCESS;
-					}
-					else
-						return ENODEV;
+					error = st_space(st, kSCSISpaceCode_Filemarks, number);
 					break;
 				case MTBSR:
 					number = -number;
 				case MTFSR:
-					if (st->Space(kSCSISpaceCode_LogicalBlocks, number) == kIOReturnSuccess)
-					{
-						if (st->blkno != -1)
-							st->blkno += number;
-						
-						return KERN_SUCCESS;
-					}
-					else
-						return ENODEV;
+					error = st_space(st, kSCSISpaceCode_LogicalBlocks, number);
 					break;
 				case MTREW:
-					if (st->Rewind() == kIOReturnSuccess)
-					{
-						st->fileno = 0;
-						st->blkno = 0;
-						return KERN_SUCCESS;
-					}
-					else
-						return ENODEV;
+					error = st_rewind(st);
 					break;
 				case MTWEOF:
-					if (st->WriteFilemarks(number) == kIOReturnSuccess)
-					{
-						if (st->fileno != -1)
-						{
-							st->fileno += number;
-							st->blkno = 0;
-						}
-						
-						return KERN_SUCCESS;
-					}
-					else
-						return ENODEV;
+					error = st_write_filemarks(st, number);
 					break;
 				case MTOFFL:
-					if (st->Unload() == kIOReturnSuccess)
-						return KERN_SUCCESS;
-					else
-						return ENODEV;
+					error = st_unload(st);
 					break;
 				case MTNOP:
-					return KERN_SUCCESS;
 					break;
 				case MTEOM:
-					if (st->Space(kSCSISpaceCode_EndOfData, number) == kIOReturnSuccess)
-						return KERN_SUCCESS;
-					else
-						return ENODEV;
+					error = st_space(st, kSCSISpaceCode_EndOfData, number);
 					break;
 				case MTSETBSIZ:
-					if ((number > 0) &&
-						(st->blkmin && st->blkmax) &&
-						(number < st->blkmin ||
-						 number > st->blkmax))
-					{
-						return (EINVAL);
-					}
-					
-					if (st->SetBlockSize(number) == kIOReturnSuccess)
-						return KERN_SUCCESS;
-					else
-						return (ENODEV);
-
+					error = st_set_blocksize(st, number);
 					break;
 				default:
 					return EINVAL;
 			}
+			break;
 		case MTIOCRDSPOS:
+			error = st_rdpos(st, false, (unsigned int *)data);
+			break;
 		case MTIOCRDHPOS:
-			if (st->ReadPosition(&pos, ((cmd == MTIOCRDSPOS) ? false : true)) == kIOReturnSuccess)
-			{
-				if (pos.flags & kSCSIReadPositionShortForm_LogicalObjectLocationUnknown)
-					return (ENOTSUP);
-				
-				*(unsigned int *)data = pos.firstLogicalObjectLocation;
-				
-				return KERN_SUCCESS;
-			}
-			return ENODEV;
+			error = st_rdpos(st, true, (unsigned int *)data);
+			break;
 		default:
 			return ENOTTY;
 	}
+	
+	return error;
 }
 
 #if 0
@@ -930,18 +978,6 @@ IOSCSITape::LoadUnload(int loadUnload)
 ErrorExit:
 	
 	return status;
-}
-
-IOReturn
-IOSCSITape::Load(void)
-{
-	return LoadUnload(1);
-}
-
-IOReturn
-IOSCSITape::Unload(void)
-{
-	return LoadUnload(0);
 }
 
 IOReturn

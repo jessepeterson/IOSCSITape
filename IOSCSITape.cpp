@@ -476,7 +476,7 @@ int st_ioctl(dev_t dev, u_long cmd, caddr_t data, int fflag, struct proc *p)
 			g->mt_erreg = st->sense_flags;
 			/* TODO: Implement the full mtget struct */
 			
-			return KERN_SUCCESS;
+			break;
 		case MTIOCTOP:
 			switch (mt->mt_op)
 			{
@@ -508,7 +508,7 @@ int st_ioctl(dev_t dev, u_long cmd, caddr_t data, int fflag, struct proc *p)
 					error = st_set_blocksize(st, number);
 					break;
 				default:
-					return EINVAL;
+					error = EINVAL;
 			}
 			break;
 		case MTIOCRDSPOS:
@@ -518,7 +518,7 @@ int st_ioctl(dev_t dev, u_long cmd, caddr_t data, int fflag, struct proc *p)
 			error = st_rdpos(st, true, (unsigned int *)data);
 			break;
 		default:
-			return ENOTTY;
+			error = ENOTTY;
 	}
 	
 	return error;

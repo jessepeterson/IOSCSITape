@@ -11,7 +11,7 @@
 #include <sys/conf.h>
 #include <miscfs/devfs/devfs.h>
 #include <sys/errno.h>
-#include <sys/mtio.h>
+#include "mtio.h"
 #include <sys/ioctl.h>
 #include <sys/uio.h>
 

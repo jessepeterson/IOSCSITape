@@ -50,7 +50,7 @@ __RCSID("$NetBSD: mt.c,v 1.46 2008/07/20 00:52:40 lukem Exp $");
 #include <sys/types.h>
 #include <sys/param.h>
 #include <sys/ioctl.h>
-#include <sys/mtio.h>
+#include "mtio.h"
 #include <sys/stat.h>
 
 #include <ctype.h>
